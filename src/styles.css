@@ -540,3 +540,72 @@ input[type='number']:invalid {
   transform: rotate(45deg);
   border-radius: 2px;
 }
+
+.move-controls {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.4fr) repeat(2, minmax(140px, 0.25fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.move-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.move-controls select {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 7px 8px;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.move-result,
+.move-box {
+  border-radius: 8px;
+  border: 1px solid;
+  padding: 10px 12px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.move-result.pass,
+.move-box.pass {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.55);
+  color: #86efac;
+}
+
+.move-result.fail,
+.move-box.fail,
+.move-result.start-fail,
+.move-result.fails-after-start {
+  background: rgba(244, 63, 94, 0.12);
+  border-color: rgba(244, 63, 94, 0.55);
+  color: #fda4af;
+}
+
+.move-result.indeterminate,
+.move-box.unknown {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fde68a;
+}
+
+.lg.move {
+  background: linear-gradient(90deg, #22c55e, #fbbf24);
+  border-radius: 50%;
+}

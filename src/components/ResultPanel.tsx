@@ -1,4 +1,4 @@
-import type { StabilityResult } from '../lib/types';
+import type { MovementPreview, StabilityResult } from '../lib/types';
 import { fmt, fmtPair } from '../lib/form';
 
 interface Props {
@@ -63,6 +63,8 @@ export default function ResultPanel({ result }: Props) {
   return (
     <section className={`panel verdict ${verdictClass}`}>
       <div className="verdict-badge">{verdictText}</div>
+
+      {result.movement && <MovementBox preview={result.movement} />}
 
       {/* 鲁棒放行结论（同一分析结果驱动） */}
       <RobustBox result={result} />
@@ -288,6 +290,47 @@ function RobustBox({ result }: { result: StabilityResult }) {
       <strong>鲁棒结论无法可靠裁决：</strong>
       区间分析未通过数值交叉校验。无法证明所有组合满足 ≠ 已满足，
       本载荷<strong>不得显示为可放行</strong>；请调整区间或配载后重试。
+    </div>
+  );
+}
+
+/** 移动预演横幅：数值与 SVG 均读取同一份 MovementPreview */
+function MovementBox({ preview }: { preview: MovementPreview }) {
+  const title: Record<MovementPreview['status'], string> = {
+    'all-safe': '移动预演全程安全',
+    'fails-after-start': '移动途中失守',
+    'start-fail': '起点不能放行',
+    indeterminate: '移动预演暂缓',
+  };
+  const cls =
+    preview.status === 'all-safe'
+      ? 'pass'
+      : preview.status === 'indeterminate'
+        ? 'unknown'
+        : 'fail';
+
+  return (
+    <div className={`move-box ${cls}`} data-testid="move-panel-result" data-status={preview.status}>
+      <strong>{title[preview.status]}：</strong>
+      {preview.status === 'all-safe' && (
+        <>连续路径比例 [0,1] 已由两端点与最坏距离凹性证明满足标称和重量区间鲁棒余量，目标位置可以应用。</>
+      )}
+      {preview.status === 'fails-after-start' && (
+        <>
+          已证安全比例上界 {fmt(preview.safeRatio!, 7)}，已证失守比例下界 {fmt(preview.unsafeRatio!, 7)}，
+          边界宽度 {fmt(preview.boundaryWidth!, 7)}（不超过 0.0001；恰等于 margin 算安全）。
+          {preview.witness && (
+            <div>
+              失守比例 {fmt(preview.witness.ratio, 7)} 处，见证重心
+              ({fmt(preview.witness.cog.x)}, {fmt(preview.witness.cog.y)})，
+              首先失守边 #{preview.witness.criticalEdge.index}，距离
+              {fmt(preview.witness.criticalEdge.signedDistance)} ＜ {fmt(preview.targetResult.margin)}。
+            </div>
+          )}
+        </>
+      )}
+      {preview.status === 'start-fail' && (preview.reason ?? '起点未通过，禁止开始移动。')}
+      {preview.status === 'indeterminate' && (preview.reason ?? '存在无法裁决的路径点，只能暂缓。')}
     </div>
   );
 }

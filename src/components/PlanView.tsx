@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { Point, StabilityResult } from '../lib/types';
 import { fmt } from '../lib/form';
 
@@ -31,6 +32,7 @@ export default function PlanView({ result }: Props) {
     margin,
     items,
     robust,
+    movement,
   } = result;
   const marginUnresolvable = warnings.some(
     (w) => w.code === 'margin-below-resolution',
@@ -40,6 +42,10 @@ export default function PlanView({ result }: Props) {
   // 统一包围盒：支撑多边形、全部货物、标称重心、失败见证重心
   const points: Point[] = [...polygon, cog];
   if (witness) points.push(witness.cog);
+  if (movement) {
+    points.push(movement.from, movement.target);
+    if (movement.witness) points.push(movement.witness.cog);
+  }
   const maxWeight = Math.max(...items.map((i) => i.weight));
   // safeRegion 为空（余量过大导致塌缩）时不参与包围盒
   if (safeRegion.length >= 3) points.push(...safeRegion);
@@ -164,6 +170,19 @@ export default function PlanView({ result }: Props) {
       {polygon.map((p, i) => (
         <circle key={`v-${i}`} cx={sx(p.x)} cy={sy(p.y)} r={3.5} fill="#cbd5e1" />
       ))}
+
+      {/* 单件移动预演路径：图、面板共用 result.movement，不使用第二套判定 */}
+      {movement && (
+        <MovementPath
+          from={movement.from}
+          target={movement.target}
+          status={movement.status}
+          safeRatio={movement.safeRatio}
+          unsafeRatio={movement.unsafeRatio}
+          sx={sx}
+          sy={sy}
+        />
+      )}
 
       {/* 标称重心到标称危险边的垂线（实际余量） */}
       <line
@@ -308,6 +327,94 @@ export default function PlanView({ result }: Props) {
         </g>
       )}
     </svg>
+  );
+}
+
+/** 移动预演路径：全程安全为绿色；失守时用已证安全段和已证失守段夹住边界 */
+function MovementPath({
+  from,
+  target,
+  status,
+  safeRatio,
+  unsafeRatio,
+  sx,
+  sy,
+}: {
+  from: Point;
+  target: Point;
+  status: NonNullable<StabilityResult['movement']>['status'];
+  safeRatio: number | null;
+  unsafeRatio: number | null;
+  sx: (x: number) => number;
+  sy: (y: number) => number;
+}) {
+  const pointAt = (t: number): Point => ({
+    x: from.x + t * (target.x - from.x),
+    y: from.y + t * (target.y - from.y),
+  });
+  const line = (a: Point, b: Point, color: string, dash?: string, width = 3) => (
+    <line
+      x1={sx(a.x)}
+      y1={sy(a.y)}
+      x2={sx(b.x)}
+      y2={sy(b.y)}
+      stroke={color}
+      strokeWidth={width}
+      strokeDasharray={dash}
+      strokeLinecap="round"
+      markerEnd={`url(#move-arrow-${color.replace('#', '')})`}
+    />
+  );
+
+  let body: ReactNode;
+  if (status === 'all-safe') {
+    body = line(from, target, '#22c55e');
+  } else if (status === 'fails-after-start' && safeRatio !== null && unsafeRatio !== null) {
+    body = (
+      <>
+        {line(from, pointAt(safeRatio), '#22c55e')}
+        {line(pointAt(safeRatio), pointAt(unsafeRatio), '#fbbf24', '5 5')}
+        {line(pointAt(unsafeRatio), target, '#fb7185', '9 4')}
+        <circle cx={sx(pointAt(unsafeRatio).x)} cy={sy(pointAt(unsafeRatio).y)} r={5} fill="#fb7185" />
+      </>
+    );
+  } else if (status === 'start-fail') {
+    body = <circle cx={sx(from.x)} cy={sy(from.y)} r={7} fill="none" stroke="#fb7185" strokeWidth={3} />;
+  } else {
+    body = line(from, target, '#fbbf24', '3 6');
+  }
+
+  return (
+    <g data-testid="movement-path" data-status={status}>
+      <defs>
+        {['22c55e', 'fbbf24', 'fb7185'].map((c) => (
+          <marker
+            key={c}
+            id={`move-arrow-${c}`}
+            markerWidth="9"
+            markerHeight="9"
+            refX="7"
+            refY="3"
+            orient="auto"
+          >
+            <path d="M0,0 L7,3 L0,6 Z" fill={`#${c}`} />
+          </marker>
+        ))}
+      </defs>
+      <g color={status === 'all-safe' ? '#22c55e' : status === 'indeterminate' ? '#fbbf24' : '#fb7185'}>
+        {body}
+      </g>
+      <circle cx={sx(from.x)} cy={sy(from.y)} r={4} fill="#e2e8f0" />
+      <text
+        x={sx(target.x) + 8}
+        y={sy(target.y) - 8}
+        fontSize={12}
+        fontWeight={700}
+        fill={status === 'all-safe' ? '#86efac' : status === 'indeterminate' ? '#fde68a' : '#fda4af'}
+      >
+        目标
+      </text>
+    </g>
   );
 }
 

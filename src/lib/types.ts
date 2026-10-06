@@ -112,6 +112,50 @@ export interface RobustResult {
   margin: number;
 }
 
+/** 移动预演状态 */
+export type MovementPreviewStatus =
+  | 'all-safe'
+  | 'fails-after-start'
+  | 'start-fail'
+  | 'indeterminate';
+
+/** 路径失守比例处的见证：复用鲁棒见证并记录路径比例 */
+export interface MovementWitness extends RobustWitness {
+  /** 见证对应的直线路径比例 t，原中心 t=0、目标中心 t=1 */
+  ratio: number;
+}
+
+/**
+ * 单件货物沿原中心 → 目标中心直线移动的连续预演结果。
+ * 这里的安全/失守边界是区间性质证明后的比例括号，不是离散采样结论。
+ */
+export interface MovementPreview {
+  status: MovementPreviewStatus;
+  itemId: string;
+  from: Point;
+  target: Point;
+  /** t=0 的原位置分析结果 */
+  startResult: StabilityResult;
+  /** t=1 的目标位置分析结果 */
+  targetResult: StabilityResult;
+  /**
+   * 已证安全的最大路径比例（括号左端/安全端）。
+   * all-safe 时为 1；start-fail/indeterminate 时为 null。
+   */
+  safeRatio: number | null;
+  /**
+   * 已证失守的最小路径比例（括号右端/失守端）。
+   * 与 safeRatio 之差不超过 1e-4；全程安全或起点无法预演时为 null。
+   */
+  unsafeRatio: number | null;
+  /** unsafeRatio - safeRatio；仅在途中失守时非 null */
+  boundaryWidth: number | null;
+  /** 失守比例处可复算的极端重量、重心与支撑边见证 */
+  witness: MovementWitness | null;
+  /** 无法裁决或起点状态说明 */
+  reason: string | null;
+}
+
 /** 稳定性计算结果（图形与数值共用同一份） */
 export interface StabilityResult {
   /** 本次计算使用的支撑多边形 */
@@ -158,6 +202,8 @@ export interface StabilityResult {
    * 与标称结论同源，类型、导入、表单、数值面板和 SVG 共同消费。
    */
   robust: RobustResult;
+  /** 若本结果用于展示一次移动预演，携带同一份预演结论 */
+  movement?: MovementPreview;
 }
 
 /** 表单解析结果 */
