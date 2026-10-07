@@ -164,3 +164,90 @@ export interface StabilityResult {
 export type FormResult =
   | { ok: true; workspace: Workspace }
   | { ok: false; errors: string[] };
+
+/* -------------------------------------------------------------------------- */
+/* 单件货物「移动预演」                                                         */
+/* -------------------------------------------------------------------------- */
+
+/** 预演放行结论 */
+export type RehearsalStatus = 'rehearsal-pass' | 'rehearsal-fail' | 'rehearsal-indeterminate';
+
+/**
+ * 首次失守点的可复算见证。
+ * 全部量均取自同一个失效点 s=breachRatio：该比例处的移动后货物位置、
+ * 使该点鲁棒最坏距离取得最小值的角点极端重量向量、对应合成重心与首先失守边。
+ */
+export interface RehearsalWitness {
+  /** 首次失守比例（失效路径段左端点） */
+  ratio: number;
+  /** 被移动货物在该比例处的中心 = 原中心 + ratio·(目标中心−原中心) */
+  movedCenter: Point;
+  /** 其余货物不动、被移动货物位于 movedCenter 时的标称合成重心 */
+  nominalCog: Point;
+  /** 使该点最坏距离取得最小值的极端重量向量（全部为区间端点，与 items 同序） */
+  weights: number[];
+  /** 该极端重量组合下的合成重心 */
+  cog: Point;
+  /** 该组合的合计重量；溢出时为 null（缺失，不可审核） */
+  totalWeight: number | null;
+  /** 首先失守的支撑边（边序最小的最坏边） */
+  criticalEdge: RobustEdgeInfo;
+  /** 该点的鲁棒最坏有符号距离（= criticalEdge.signedDistance，未舍入） */
+  worstDistance: number;
+  /** 相对 margin 的短缺量 margin - worstDistance */
+  shortfall: number;
+}
+
+/**
+ * 单件货物移动预演结果。
+ *
+ * 沿「原中心 → 目标中心」的直线路径（参数 s ∈ [0,1]）逐点检查：
+ * 标称距离与允许重量区间下的鲁棒最坏距离对每条支撑边都满足 margin。
+ * 利用距离随 s 的分式线性/区间极值结构得到完整证明，而非按少量采样点放行。
+ *
+ * 边界区间 [0, breachLower) 已证安全、[breachUpper, 1] 已证失守，
+ * 宽度 ≤ BREACH_WIDTH_TOLERANCE（0.0001）；breachLower 处恰等于 margin 仍算安全。
+ */
+export interface MoveRehearsal {
+  status: RehearsalStatus;
+  /** 被移动货物在 items 中的下标 */
+  itemIndex: number;
+  /** 目标中心 */
+  target: Point;
+  /** 起点（该货物原中心） */
+  origin: Point;
+  /** 要求安全余量 */
+  margin: number;
+  /** 起点（s=0）是否即可放行：标称与鲁棒均通过且无不可审核量 */
+  startReleasable: boolean;
+
+  /**
+   * 已证安全比例上界：s ∈ [0, safeRatio)（恰在 safeRatio 上压线也算安全，
+   * 即安全段为 [0, safeRatio]）。pass 时为 1。
+   */
+  safeRatio: number;
+  /**
+   * 已证失守比例下界：s ∈ [breachRatio, 1] 已证失守。
+   * pass 时为 null；fail 时与 safeRatio 的间距不超过 0.0001。
+   */
+  breachRatio: number | null;
+  /** 安全/失守边界宽度（breachRatio - safeRatio）；全程安全时为 0 */
+  boundaryWidth: number;
+
+  /**
+   * 起点（s=0）的完整稳定性分析——预演、俯视图与数值面板共用的同一份起点结果。
+   */
+  startResult: StabilityResult;
+  /**
+   * 目标点（s=1）的完整稳定性分析：供面板复算路径终点指标；
+   * 未全程通过时应用按钮必须保持禁用。
+   */
+  endResult: StabilityResult;
+  /** 失守点的可复算见证（极端重量、重心、支撑边）；pass/indeterminate 时为 null */
+  witness: RehearsalWitness | null;
+  /** 无法裁决（含起点暂缓）时的中文说明 */
+  reason: string | null;
+}
+
+/** 「已证安全／已证失守」边界允许的最大宽度 */
+export const BREACH_WIDTH_TOLERANCE = 0.0001;

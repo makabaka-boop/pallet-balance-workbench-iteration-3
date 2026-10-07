@@ -1,4 +1,4 @@
-import type { Point, StabilityResult } from '../lib/types';
+import type { MoveRehearsal, Point, StabilityResult } from '../lib/types';
 import { fmt } from '../lib/form';
 
 const VIEW_W = 820;
@@ -7,6 +7,12 @@ const PAD = 70;
 
 interface Props {
   result: StabilityResult;
+  /**
+   * 与 result 同源的移动预演（result 即预演起点结果）。
+   * 传入时俯视图叠加：原中心→目标中心路径（按安全/失守/暂缓着色）、
+   * 目标点与首次失守点见证——与数值面板使用同一份预演结果。
+   */
+  rehearsal?: MoveRehearsal | null;
 }
 
 /**
@@ -18,7 +24,7 @@ interface Props {
  * - 红黄色五边形「失败见证」：某一允许重量组合下失守 margin 的极端重心；
  * 二者同时出现，绝不互相冒充。
  */
-export default function PlanView({ result }: Props) {
+export default function PlanView({ result, rehearsal = null }: Props) {
   const {
     polygon,
     safeRegion,
@@ -43,6 +49,16 @@ export default function PlanView({ result }: Props) {
   const maxWeight = Math.max(...items.map((i) => i.weight));
   // safeRegion 为空（余量过大导致塌缩）时不参与包围盒
   if (safeRegion.length >= 3) points.push(...safeRegion);
+
+  // 预演路径的目标点、失守点/见证重心也纳入包围盒（与数值面板同一结果）
+  const rehearsalWitness = rehearsal?.witness ?? null;
+  if (rehearsal) {
+    points.push(rehearsal.target);
+    if (rehearsalWitness) {
+      points.push(rehearsalWitness.movedCenter);
+      points.push(rehearsalWitness.cog);
+    }
+  }
 
   let minX = Infinity;
   let minY = Infinity;
@@ -307,6 +323,14 @@ export default function PlanView({ result }: Props) {
           ))}
         </g>
       )}
+
+      {rehearsal && (
+        <RehearsalOverlay
+          rehearsal={rehearsal}
+          sx={sx}
+          sy={sy}
+        />
+      )}
     </svg>
   );
 }
@@ -350,4 +374,134 @@ function warningShort(code: string): string {
     default:
       return '存在无法可靠表达的量，禁止据此放行';
   }
+}
+
+/**
+ * 移动预演叠加层：原中心→目标中心直线路径。
+ * 颜色与数值面板的预演结论严格同源：
+ * - rehearsal-pass：整段绿色实线；
+ * - rehearsal-fail：已证安全段绿、失守段红，失守点（边界）给出见证；
+ * - rehearsal-indeterminate：整段琥珀虚线（暂缓，禁止应用）。
+ */
+function RehearsalOverlay({
+  rehearsal,
+  sx,
+  sy,
+}: {
+  rehearsal: MoveRehearsal;
+  sx: (x: number) => number;
+  sy: (y: number) => number;
+}) {
+  const { origin, target, status, safeRatio, breachRatio, witness } = rehearsal;
+  const at = (s: number): Point => ({
+    x: origin.x + (target.x - origin.x) * s,
+    y: origin.y + (target.y - origin.y) * s,
+  });
+
+  const x0 = sx(origin.x);
+  const y0 = sy(origin.y);
+  const x1 = sx(target.x);
+  const y1 = sy(target.y);
+  const xs = (s: number) => sx(at(s).x);
+  const ys = (s: number) => sy(at(s).y);
+
+  const pathColor =
+    status === 'rehearsal-pass'
+      ? '#22c55e'
+      : status === 'rehearsal-fail'
+        ? '#ef4444'
+        : '#f59e0b';
+
+  const witnessFoot =
+    status === 'rehearsal-fail' && witness
+      ? footOf(witness.cog, witness.criticalEdge.a, witness.criticalEdge.b)
+      : null;
+
+  return (
+    <g className="rehearsal-overlay" data-testid="rehearsal-overlay">
+      {status === 'rehearsal-indeterminate' ? (
+        <line
+          x1={x0}
+          y1={y0}
+          x2={x1}
+          y2={y1}
+          stroke={pathColor}
+          strokeWidth={3}
+          strokeDasharray="10 6"
+        />
+      ) : (
+        <>
+          {/* 已证安全段 [0, safeRatio]（边界恰压线算安全，故包含 safeRatio） */}
+          <line
+            x1={x0}
+            y1={y0}
+            x2={xs(safeRatio)}
+            y2={ys(safeRatio)}
+            stroke="#22c55e"
+            strokeWidth={3.5}
+          />
+          {/* 已证失守段 [breachRatio, 1] */}
+          {status === 'rehearsal-fail' && breachRatio !== null && (
+            <line
+              x1={xs(breachRatio)}
+              y1={ys(breachRatio)}
+              x2={x1}
+              y2={y1}
+              stroke={pathColor}
+              strokeWidth={3.5}
+            />
+          )}
+        </>
+      )}
+
+      {/* 原中心（路径起点）：白色空心圆 */}
+      <circle cx={x0} cy={y0} r={6} fill="none" stroke="#e2e8f0" strokeWidth={2} />
+
+      {/* 目标点：菱形标记 */}
+      <polygon
+        points={`${x1},${y1 - 8} ${x1 + 8},${y1} ${x1},${y1 + 8} ${x1 - 8},${y1}`}
+        fill={status === 'rehearsal-pass' ? 'rgba(34,197,94,0.3)' : 'rgba(245,158,11,0.3)'}
+        stroke={pathColor}
+        strokeWidth={2.2}
+      />
+      <text x={x1 + 12} y={y1 + 5} fontSize={13} fontWeight={700} fill={pathColor}>
+        目标
+      </text>
+
+      {/* 首次失守点：货物移动位置 + 极端重量组合见证重心 + 到失守边的垂线 */}
+      {status === 'rehearsal-fail' && witness && witnessFoot && (
+        <g>
+          <line
+            x1={sx(witness.cog.x)}
+            y1={sy(witness.cog.y)}
+            x2={sx(witnessFoot.x)}
+            y2={sy(witnessFoot.y)}
+            stroke="#fb7185"
+            strokeWidth={1.8}
+            strokeDasharray="6 4"
+          />
+          {/* 失守比例处的货物移动位置：橙色小方块 */}
+          <rect
+            x={sx(witness.movedCenter.x) - 5}
+            y={sy(witness.movedCenter.y) - 5}
+            width={10}
+            height={10}
+            fill="rgba(245,158,11,0.4)"
+            stroke="#f59e0b"
+            strokeWidth={1.8}
+          />
+          <WitnessMarker x={sx(witness.cog.x)} y={sy(witness.cog.y)} />
+          <text
+            x={sx(witness.cog.x) + 14}
+            y={sy(witness.cog.y) + 18}
+            fontSize={12.5}
+            fontWeight={700}
+            fill="#fda4af"
+          >
+            路径失守 s={fmt(witness.ratio, 6)}
+          </text>
+        </g>
+      )}
+    </g>
+  );
 }

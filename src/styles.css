@@ -540,3 +540,64 @@ input[type='number']:invalid {
   transform: rotate(45deg);
   border-radius: 2px;
 }
+
+.lg.path-safe {
+  background: linear-gradient(90deg, var(--green) 50%, var(--red) 50%);
+  border: none;
+  border-radius: 0;
+  height: 4px;
+  vertical-align: 2px;
+}
+
+.rehearsal-panel .rehearsal-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 6px 0 4px;
+}
+
+.rehearsal-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.rehearsal-controls input {
+  width: 130px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.rehearsal-controls input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.rehearsal-controls .btn {
+  padding: 9px 16px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rehearsal-coords {
+  margin-bottom: 0;
+}
+
+/* 预演面板内的见证盒与主面板同款，收窄外边距 */
+.robust-box .witness-box {
+  margin-top: 10px;
+  background: rgba(244, 63, 94, 0.08);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  border-radius: 8px;
+  padding: 10px 12px;
+}

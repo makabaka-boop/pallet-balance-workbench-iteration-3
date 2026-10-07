@@ -1,6 +1,6 @@
 import { analyzeStability } from './geometry';
 import { COORD_BOUND } from './parse';
-import type { StabilityResult, Workspace } from './types';
+import type { Point, StabilityResult, Workspace } from './types';
 
 /** 编辑表单中的单行文本（未提交的原始输入也保留为字符串） */
 export interface ItemDraft {
@@ -120,6 +120,26 @@ export function resolveForm(polygon: Workspace['polygon'], form: FormState): Res
 
   const workspace: Workspace = { polygon, items, margin };
   return { ok: true, result: analyzeStability(workspace) };
+}
+
+/**
+ * 仅在「移动预演」全程通过后调用：把一件货物的中心提交到目标位置。
+ * 未全程通过时调用方必须禁用入口；本函数不做放行判断，只做确定性的表单提交。
+ * 目标数值按最短可往返字符串回填，保证再次解析与目标点逐位一致。
+ */
+export function applyTargetToForm(
+  form: FormState,
+  itemIndex: number,
+  target: Point,
+): FormState {
+  return {
+    ...form,
+    items: form.items.map((d, i) =>
+      i === itemIndex
+        ? { ...d, x: String(target.x), y: String(target.y) }
+        : d,
+    ),
+  };
 }
 
 /**
